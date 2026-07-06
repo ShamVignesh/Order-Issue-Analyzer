@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Issue Analyzer</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; background-color: #f4f4f9; color: #333; }
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .btn:hover { background: #0056b3; }
+        
+        /* KPI Cards Layout */
+        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; border-top: 4px solid #4CAF50; }
+        .card h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; }
+        .card p { margin: 10px 0 0; font-size: 24px; font-weight: bold; }
+        
+        /* Filter and Form Sections */
+        .grid-sections { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+        .section-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Order Issue Analyzer Dashboard</h1>
+        <div>
+            <button class="btn" style="background:#28a745;" onclick="loadKPIs()">Refresh Health Metrics</button>
+            <button class="btn" onclick="loadOrders()">Refresh Orders List</button>
+        </div>
+    </div>
+
+    <!-- 1. KPI View Section -->
+    <div class="kpi-container">
+        <div class="card" style="border-top-color: #007bff;">
+            <h3>System Status</h3>
+            <p id="healthStatus">Loading...</p>
+        </div>
+        <div class="card" style="border-top-color: #28a745;">
+            <h3>Health Score</h3>
+            <p id="healthScore" style="color: #28a745;">0.00%</p>
+        </div>
+        <div class="card" style="border-top-color: #dc3545;">
+            <h3>Total Issues Found</h3>
+            <p id="totalIssues" style="color: #dc3545;">0</p>
+        </div>
+    </div>
+
+    <div class="grid-sections">
+        <!-- 2. Operational Data Import Form Section -->
+        <div class="section-box">
+            <h2>Log/Import New Issue</h2>
+            <form id="issueForm" onsubmit="importIssue(event)">
+                <div class="form-group">
+                    <label for="orderId">Order ID</label>
+                    <input type="number" id="orderId" required placeholder="e.g., 101">
+                </div>
+                <div class="form-group">
+                    <label for="issueType">Issue Type</label>
+                    <select id="issueType" required>
+                        <option value="Delayed">Delayed</option>
+                        <option value="Incorrect Item">Incorrect Item</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="rootCause">Root Cause</label>
+                    <input type="text" id="rootCause" required placeholder="e.g., Kitchen delay, Missing ingredient">
+                </div>
+                <button type="submit" class="btn" style="background: #28a745; width: 100%;">Log Operational Issue</button>
+            </form>
+            <p id="formMessage" style="margin-top:10px; font-weight:bold;"></p>
+        </div>
+
+        <!-- 3. Live Search & Filter Section -->
+        <div class="section-box">
+            <h2>Search / Filter Orders</h2>
+            <div class="form-group">
+                <label for="statusFilter">Filter by Status</label>
+                <select id="statusFilter" onchange="filterOrders()">
+                    <option value="ALL">Show All Statuses</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Pending">Pending</option>
+                </select>
+            </div>
+            
+            <button class="btn" style="background: #17a2b8; width: 100%; margin-bottom: 20px;" onclick="exportToCSV()">
+                📥 Export filtered data as CSV Report
+            </button>
+
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            
+            <h3>Smart Root-Cause Diagnostic</h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Select an issue type to run an automated root-cause diagnostic check:</p>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <select id="diagnosticIssueType" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1;">
+                    <option value="Delayed">Delayed</option>
+                    <option value="Incorrect Item">Incorrect Item</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+                <button class="btn" style="background: #007bff; padding: 8px 15px;" onclick="runDiagnostic()">Analyze Cause</button>
+            </div>
+
+            <!-- Display Results -->
+            <div id="diagnosticResult" style="background: #f8f9fa; padding: 15px; border-radius: 6px; display: none; border-left: 4px solid #007bff;">
+                <p><strong>Primary Failure Reason:</strong> <span id="diagTopCause" style="color: #dc3545;">None</span></p>
+                <p style="margin-top: 5px;"><strong>System Recommendation:</strong> <em id="diagSuggestion">None</em></p>
+            </div>
+        </div>
+
+    <!-- 4. Data View Table -->
+    <h2>All Orders Log</h2>
+    <table id="orderTable">
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Customer ID</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Loaded dynamically -->
+        </tbody>
+    </table>
+
+    <script>
+        // Store all retrieved orders in memory for front-end client-side filtering
+        let allOrdersCached = [];
+
+        // Fetch metrics from your FastAPI endpoint "/analytics/health-check"
+        async function loadKPIs() {
+            try {
+                const response = await fetch('/analytics/health-check');
+                const result = await response.json();
+                if (!result.error && result.status) {
+                    document.getElementById('healthStatus').innerText = result.status;
+                    document.getElementById('healthScore').innerText = result.health_score;
+                    document.getElementById('totalIssues').innerText = result.total_issues;
+                } else {
+                    document.getElementById('healthStatus').innerText = "No Data";
+                }
+            } catch (err) {
+                console.error("KPI Fetch Failed:", err);
+            }
+        }
+
+        // Fetch orders list from "/orders"
+        async function loadOrders() {
+            const response = await fetch('/orders');
+            const result = await response.json();
+            
+            // Save data locally so we can filter instantly without breaking
+            allOrdersCached = result.data || [];
+            displayOrders(allOrdersCached);
+        }
+        function exportToCSV() {
+    // If there is no data loaded, stop the execution
+    if (allOrdersCached.length === 0) {
+        alert("No order data available to export.");
+        return;
+    }
+
+    // Determine whether we are exporting the entire dataset or just a filtered view
+    const selectedStatus = document.getElementById('statusFilter').value;
+    const targets = selectedStatus === "ALL" 
+        ? allOrdersCached 
+        : allOrdersCached.filter(o => o.status === selectedStatus);
+
+    // Formulate CSV Headers and Data Lines
+    let csvRows = ["Order ID,Customer ID,Status"];
+    targets.forEach(item => {
+        csvRows.push(`${item.order_id},${item.customer_id},${item.status}`);
+    });
+
+    // Create a virtual file link download trigger
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const downloadAnchor = document.createElement("a");
+    
+    downloadAnchor.setAttribute("href", encodedUri);
+    downloadAnchor.setAttribute("download", `Order_Issue_Report_${selectedStatus}.csv`);
+    document.body.appendChild(downloadAnchor);
+    
+    downloadAnchor.click(); // Fires the download download box automatically
+    document.body.removeChild(downloadAnchor);
+}
+        async function runDiagnostic() {
+            const issueType = document.getElementById('diagnosticIssueType').value;
+            const resultBox = document.getElementById('diagnosticResult');
+    
+            try {
+            const response = await fetch(`/analytics/diagnostic?issue_type=${issueType}`);
+            const data = await response.json();
+        
+            if (!data.error) {
+                resultBox.style.display = "block";
+                document.getElementById('diagTopCause').innerText = data.top_cause;
+                document.getElementById('diagSuggestion').innerText = data.ai_suggestion;
+            }
+        } 
+        catch (err) {
+            console.error("Diagnostic engine failure:", err);
+        }
+    }
+
+        // Handles rendering the array data inside your table view
+        function displayOrders(ordersArray) {
+            const tableBody = document.querySelector('#orderTable tbody');
+            tableBody.innerHTML = ''; // Clear old data
+
+            ordersArray.forEach(order => {
+                const row = `<tr>
+                    <td>${order.order_id}</td>
+                    <td>${order.customer_id}</td>
+                    <td><b style="color: ${order.status === 'Delayed' || order.status === 'Cancelled' ? '#dc3545' : '#28a745'}">${order.status}</b></td>
+                </tr>`;
+                tableBody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        // Client side drop-down execution for search/filtering requirement
+        function filterOrders() {
+            const selectedStatus = document.getElementById('statusFilter').value;
+            if (selectedStatus === "ALL") {
+                displayOrders(allOrdersCached);
+            } else {
+                const filtered = allOrdersCached.filter(o => o.status === selectedStatus);
+                displayOrders(filtered);
+            }
+        }
+
+        // POST operational issue directly down into the API backend
+        async function importIssue(event) {
+            event.preventDefault();
+            const order_id = document.getElementById('orderId').value;
+            const issue_type = document.getElementById('issueType').value;
+            const root_cause = document.getElementById('rootCause').value;
+            const msgElement = document.getElementById('formMessage');
+
+            try {
+                const response = await fetch('/issues/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_id: parseInt(order_id), issue_type, root_cause })
+                });
+                const data = await response.json();
+                
+                if (data.status === "success") {
+                    msgElement.style.color = "green";
+                    msgElement.innerText = "Issue successfully logged into database!";
+                    document.getElementById('issueForm').reset();
+                    // Auto reload metrics to reflect the updates live
+                    loadKPIs();
+                } else {
+                    msgElement.style.color = "red";
+                    msgElement.innerText = "Error: " + (data.error || "Could not log.");
+                }
+            } catch (err) {
+                msgElement.style.color = "red";
+                msgElement.innerText = "Network transmission failed.";
+            }
+        }
+
+        // Execute functions smoothly right upon browser load
+        window.onload = function() {
+            loadOrders();
+            loadKPIs();
+        };
+    </script>
+</body>
+</html>
